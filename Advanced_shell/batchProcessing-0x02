@@ -1,0 +1,48 @@
+#!/bin/bash
+
+# Define the list of Pokémon names to fetch
+POKEMON_LIST=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
+
+# Base URL for the PokeAPI (using the version 2 endpoint for detailed data)
+BASE_URL="https://pokeapi.co/api/v2/pokemon/"
+
+# Delay between requests (in seconds) to prevent rate limiting.
+# A small delay is a courtesy to the public API server.
+DELAY=0.5
+
+echo "Starting data retrieval for ${#POKEMON_LIST[@]} Pokémon..."
+echo "---------------------------------------------------"
+
+# Loop through each Pokémon in the list
+for POKEMON_NAME in "${POKEMON_LIST[@]}"; do
+    TARGET_URL="${BASE_URL}${POKEMON_NAME}"
+    OUTPUT_FILE="${POKEMON_NAME}.json"
+
+    echo "Fetching: ${POKEMON_NAME}..."
+
+    # Execute curl request:
+    # -sS: Silent mode, but show error if something goes wrong.
+    # --fail: Causes curl to exit with an error code for HTTP errors (like 404).
+    # -o $OUTPUT_FILE: Writes the successful response directly to the file.
+    # 2>> api_errors.log: Appends any error messages (stderr) from curl to a log file.
+    
+    curl -sS --fail -o "$OUTPUT_FILE" "$TARGET_URL" 2>> api_errors.log
+    
+    CURL_EXIT_STATUS=$?
+
+    if [ $CURL_EXIT_STATUS -eq 0 ]; then
+        echo "   -> SUCCESS: Data saved to $OUTPUT_FILE"
+    else
+        TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+        echo "   -> FAILURE [Code $CURL_EXIT_STATUS]: Could not retrieve data. Check api_errors.log"
+        # Log a cleaner message to the error file for easier debugging
+        echo "[$TIMESTAMP] Failed to fetch $POKEMON_NAME. Curl exit status: $CURL_EXIT_STATUS." >> api_errors.log
+    fi
+
+    # Wait for the specified delay before the next request
+    sleep "$DELAY"
+
+done
+
+echo "---------------------------------------------------"
+echo "Data retrieval complete. Check the current directory for .json files and api_errors.log."
