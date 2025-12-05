@@ -1,0 +1,91 @@
+#!/bin/bash
+
+# Define the output files
+CSV_FILE="pokemon_report.csv"
+SUMMARY_FILE="report_summary.txt"
+
+# --- PART 1: CSV Generation ---
+
+echo "Starting report generation..."
+
+# 1. Create the CSV header
+echo "Name,Height (m),Weight (kg)" > "$CSV_FILE"
+
+# 2. Loop through all .json files in the current directory
+# The '*' wildcard ensures we process every JSON file created previously.
+for FILE in *.json; do
+    # Check if the file exists and is readable (handles case where no .json files exist)
+    if [ -f "$FILE" ]; then
+        echo "Processing $FILE..."
+
+        # Use jq to extract data and format it as a comma-separated string:
+        # 1. .name (string)
+        # 2. .height (integer, in decimeters)
+        # 3. .weight (integer, in hectograms)
+        # We separate them with commas for easy CSV formatting.
+        CSV_LINE=$(jq -r \
+            '"\(.name),\(.height),\(.weight)"' \
+            "$FILE" 2>/dev/null) # Suppress jq errors if file is not valid JSON
+
+        # Check if jq successfully extracted data
+        if [ ! -z "$CSV_LINE" ]; then
+            
+            # Use awk to perform unit conversion (dm -> m, hg -> kg) and print the final CSV row.
+            # -F ',' sets the input field separator to comma (from jq output)
+            # OFS=',' sets the output field separator to comma (for CSV format)
+            echo "$CSV_LINE" | awk -F',' 'BEGIN {OFS=","} {
+                # $1: Name (e.g., bulbasaur)
+                # $2: Height in decimeters (e.g., 7) -> converted to meters ($2 / 10)
+                # $3: Weight in hectograms (e.g., 69) -> converted to kilograms ($3 / 10)
+                
+                # Print the Name, converted Height, and converted Weight
+                printf "%s,%.1f,%.1f\n", $1, $2 / 10, $3 / 10;
+            }' >> "$CSV_FILE"
+        fi
+    fi
+done
+
+echo "Successfully generated CSV report: $CSV_FILE"
+echo "---------------------------------------------------"
+
+
+# --- PART 2: Average Calculation using Awk ---
+
+echo "Calculating summary statistics..."
+
+# Use awk to read the CSV file, skip the header, and calculate the sum and count.
+# -F ',' sets the input field separator to comma.
+# NR > 1 skips the header line (record number greater than 1).
+# END block runs after all lines are processed for final calculations.
+awk -F',' '
+    BEGIN {
+        sum_height = 0;
+        sum_weight = 0;
+        count = 0;
+    }
+    NR > 1 {
+        # Accumulate sums and count for all data rows
+        sum_height += $2;  # $2 is the Height (m) column
+        sum_weight += $3;  # $3 is the Weight (kg) column
+        count++;
+    }
+    END {
+        if (count > 0) {
+            avg_height = sum_height / count;
+            avg_weight = sum_weight / count;
+            
+            print "--- Pokémon Averages ---";
+            print "Total Pokémon analyzed: " count;
+            printf "Average Height: %.2f meters\n", avg_height;
+            printf "Average Weight: %.2f kilograms\n", avg_weight;
+        } else {
+            print "No data found to calculate averages.";
+        }
+    }
+' "$CSV_FILE" > "$SUMMARY_FILE"
+
+# Print the final summary to the console
+cat "$SUMMARY_FILE"
+
+echo "---------------------------------------------------"
+echo "Report complete. Detailed summary saved to $SUMMARY_FILE"
