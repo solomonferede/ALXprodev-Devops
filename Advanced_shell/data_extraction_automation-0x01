@@ -1,0 +1,57 @@
+#!/bin/bash
+
+# Ensure the required file exists
+FILE="data.json"
+if [ ! -f "$FILE" ]; then
+    echo "Error: Data file '$FILE' not found. Please ensure it is created and contains the JSON data."
+    exit 1
+fi
+
+# ----------------------------------------------------------------------
+# 1. jq: Extraction
+# Extracts the four necessary fields (name, primary type, weight, height)
+# and combines them into a single, pipe-separated line.
+# ----------------------------------------------------------------------
+RAW_DATA=$(jq -r \
+    '"\(.name)|\(.types[0].type.name)|\(.weight)|\(.height)"' \
+    "$FILE")
+
+# Check if jq failed to extract data
+if [ -z "$RAW_DATA" ]; then
+    echo "Error: jq failed to extract data from $FILE. Check file structure."
+    exit 1
+fi
+
+# ----------------------------------------------------------------------
+# 2. awk: Formatting, Unit Conversion, and Capitalization
+# awk reads the pipe-separated line, performs math (conversions), and 
+# constructs the final sentence, using awk's toupper() for capitalization.
+# We are no longer passing arguments after the closing brace, fixing the error.
+# ----------------------------------------------------------------------
+FINAL_OUTPUT=$(echo "$RAW_DATA" | awk -F'|' '{
+    # $1: name, $2: type, $3: weight (hg), $4: height (dm)
+
+    # 1. Calculate final values in kg and meters
+    WEIGHT = $3 / 10;
+    HEIGHT = $4 / 10;
+
+    # 2. Capitalize Name and Type (e.g., "pikachu" -> "Pikachu")
+    # toupper(substr($1, 1, 1)) gets the capitalized first letter.
+    # substr($1, 2) gets the rest of the string.
+    NAME_CAP = toupper(substr($1, 1, 1)) substr($1, 2);
+    TYPE_CAP = toupper(substr($2, 1, 1)) substr($2, 2);
+
+    # 3. Print the final, human-readable sentence
+    printf "%s is of type %s, weighs %gkg, and is %gm tall.\n", NAME_CAP, TYPE_CAP, WEIGHT, HEIGHT
+}')
+
+# ----------------------------------------------------------------------
+# 3. sed: Final Cleanup (Optional, but included to show tool use)
+# Using sed here to ensure the "kg" and "m" units are properly formatted 
+# or for any final punctuation cleanup.
+# We use sed to ensure there are no trailing whitespaces just in case.
+# ----------------------------------------------------------------------
+FINAL_OUTPUT=$(echo "$FINAL_OUTPUT" | sed 's/[[:space:]]*$//')
+
+# Print the final result
+echo "$FINAL_OUTPUT"
