@@ -1,0 +1,37 @@
+#!/bin/bash
+#!/bin/bash
+
+# Fetching a public JSON endpoint.
+REQUEST_COMMAND="curl -s 'https://pokeapi.co/api/v2/pokemon/'"
+
+
+# 1. Execute the command and redirect its output to a temporary file.
+# The `2>&1` ensures both standard output and standard error go to the file,
+# but we only capture the exit code below.
+
+OUTPUT_FILE=$(mktemp)
+eval "$REQUEST_COMMAND" > "$OUTPUT_FILE" 2>&1
+
+# 2. Capture the exit status ($?) of the executed command.
+# 0 typically means success, anything else is an error.
+
+EXIT_STATUS=$?
+
+# 3. Check the exit status and handle the output accordingly.
+if [ $EXIT_STATUS -eq 0 ]; then
+    # SUCCESS: Save the content of the temporary file to data.json
+    # The output is moved/copied to the final destination file.
+    cat "$OUTPUT_FILE" > data.json
+    echo "SUCCESS: Response saved to data.json"
+else
+    # FAILURE: Log the error (which is captured in the temp file) to errors.txt
+    # We prepend a timestamp for better logging.
+    TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+    echo "[$TIMESTAMP] ERROR executing command: '$REQUEST_COMMAND'" >> errors.txt
+    # Append the actual error output
+    cat "$OUTPUT_FILE" >> errors.txt
+    echo "FAILURE: Error details logged to errors.txt"
+fi
+
+# 4. Clean up the temporary file.
+rm -f "$OUTPUT_FILE"
