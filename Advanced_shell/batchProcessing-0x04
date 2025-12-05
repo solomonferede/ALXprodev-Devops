@@ -1,0 +1,52 @@
+#!/bin/bash
+
+# Define the list of Pokémon names to fetch
+POKEMON_LIST=("bulbasaur" "ivysaur" "venusaur" "charmander" "charmeleon")
+
+# Base URL for the PokeAPI
+BASE_URL="https://pokeapi.co/api/v2/pokemon/"
+
+echo "Starting parallel data retrieval for ${#POKEMON_LIST[@]} Pokémon..."
+echo "---------------------------------------------------"
+
+# Function to handle the fetching for a single Pokémon
+# This function will be run in the background.
+fetch_data() {
+    local POKEMON_NAME=$1
+    local TARGET_URL="${BASE_URL}${POKEMON_NAME}"
+    local OUTPUT_FILE="${POKEMON_NAME}.json"
+
+    echo "   -> [PID $$] Starting fetch for $POKEMON_NAME..."
+
+    # Execute curl request:
+    # -sS: Silent mode, but show error if something goes wrong.
+    # --fail: Causes curl to exit with an error code for HTTP errors (like 404).
+    # -o $OUTPUT_FILE: Writes the successful response directly to the file.
+    # 2>> api_errors_parallel.log: Appends any errors (stderr) to a shared log file.
+    curl -sS --fail -o "$OUTPUT_FILE" "$TARGET_URL" 2>> api_errors_parallel.log
+    
+    CURL_EXIT_STATUS=$?
+
+    if [ $CURL_EXIT_STATUS -eq 0 ]; then
+        echo "   -> [PID $$] SUCCESS: $POKEMON_NAME data saved to $OUTPUT_FILE"
+    else
+        TIMESTAMP=$(date +"%Y-%m-%d %H:%M:%S")
+        echo "   -> [PID $$] FAILURE [Code $CURL_EXIT_STATUS]: $POKEMON_NAME failed. Check api_errors_parallel.log"
+        # Log a cleaner message to the error file for easier debugging
+        echo "[$TIMESTAMP] Failed to fetch $POKEMON_NAME (PID $$). Curl exit status: $CURL_EXIT_STATUS." >> api_errors_parallel.log
+    fi
+}
+
+# Loop through each Pokémon and start the fetch_data function in the background
+for POKEMON_NAME in "${POKEMON_LIST[@]}"; do
+    # Call the function and use '&' to run it as a background job
+    fetch_data "$POKEMON_NAME" &
+done
+
+# Wait for all background jobs to complete
+echo "All fetch jobs initiated. Waiting for all ${#POKEMON_LIST[@]} jobs to finish..."
+wait
+
+echo "---------------------------------------------------"
+echo "All parallel data retrieval jobs completed."
+echo "Check the current directory for .json files and api_errors_parallel.log for any failures."
